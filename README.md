@@ -15,9 +15,9 @@ The Next.js app calls a small **Apps Script web app** that lives inside the Goog
 1. Open the spreadsheet at https://docs.google.com/spreadsheets/d/1HVfUcWKmMo_mgqUObvJLpGri4aHeu-8rHz1DQJOzeiw/edit
 2. **Extensions → Apps Script**.
 3. Replace the contents of the editor with the file at `apps-script/Code.gs` in this repo (copy/paste the whole file).
-4. Click the **gear icon (Project Settings)** in the left sidebar → scroll to **Script properties** → **Add script property**:
-   - **Property:** `API_TOKEN`
-   - **Value:** any long random string (this becomes `APPS_SCRIPT_TOKEN` below)
+4. Click the **gear icon (Project Settings)** in the left sidebar → scroll to **Script properties** → **Add script property** twice:
+   - `API_TOKEN` = any long random string (becomes `APPS_SCRIPT_TOKEN` below)
+   - `SHEET_ID`  = the spreadsheet ID from its URL (the part between `/d/` and `/edit`)
    - Click **Save script properties**
 5. Back to the editor → **Deploy → New deployment**.
 6. Click the gear next to "Select type" → **Web app**.
@@ -79,3 +79,12 @@ If you change `apps-script/Code.gs`:
 2. **Deploy → Manage deployments** → click the pencil on the existing deployment → set **Version: New version** → **Deploy**.
 
 If you create a *new* deployment instead, the URL changes, and you must update `APPS_SCRIPT_URL` in `.env.local` and Vercel.
+
+## Switching to a different spreadsheet
+
+The bridge reads whichever spreadsheet ID is in the `SHEET_ID` script property. To point at a different sheet:
+
+1. Make sure the Google account the script runs as (`Execute as: Me`) has at least Viewer access to the new sheet.
+2. In Apps Script: **Project Settings (gear) → Script properties** → edit `SHEET_ID` to the new ID → save.
+3. **Deploy → Manage deployments** → pencil → **Version: New version** → **Deploy** (only required if you also changed code; property changes alone take effect immediately).
+4. No `.env.local` change needed — the URL stays the same.

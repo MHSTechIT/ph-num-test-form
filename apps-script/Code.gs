@@ -1,14 +1,22 @@
 /**
  * MHS Invoice Dashboard — Sheet bridge.
  *
- * Deploy as a web app:
- *   1) Project Settings (gear icon) → Script Properties → Add "API_TOKEN" with a
- *      long random value (this becomes APPS_SCRIPT_TOKEN in .env.local).
- *   2) Deploy → New deployment → Type: Web app.
+ * Reads from the spreadsheet whose ID is stored in the SHEET_ID script
+ * property, so the bound document doesn't matter and you can switch
+ * spreadsheets without redeploying.
+ *
+ * One-time setup:
+ *   1) Project Settings (gear icon) → Script Properties:
+ *        - API_TOKEN  = a long random string (must match APPS_SCRIPT_TOKEN in .env.local)
+ *        - SHEET_ID   = the spreadsheet ID from its URL
+ *   2) Deploy → New deployment → Web app.
  *      Execute as: Me. Who has access: Anyone (with the link).
  *   3) Copy the deployment URL into APPS_SCRIPT_URL in .env.local.
  *
- * Endpoints (all GET, query string):
+ * To switch to a different spreadsheet later, just update the SHEET_ID
+ * script property and click Deploy → Manage deployments → New version.
+ *
+ * Endpoints (GET, query string):
  *   ?action=sheet&name=<TabName>&token=...   -> { sheet, headers, values }
  *   ?action=tabs&token=...                   -> { tabs: [...] }
  */
@@ -23,14 +31,19 @@ function doPost(e) {
 
 function handle(e) {
   try {
-    const expected = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
+    var props = PropertiesService.getScriptProperties();
+    var expected = props.getProperty('API_TOKEN');
     if (!expected) return json({ error: 'server_misconfigured: API_TOKEN script property missing' });
 
-    const params = (e && e.parameter) || {};
+    var params = (e && e.parameter) || {};
     if (params.token !== expected) return json({ error: 'unauthorized' });
 
-    const action = params.action || 'sheet';
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetId = props.getProperty('SHEET_ID');
+    if (!sheetId) return json({ error: 'server_misconfigured: SHEET_ID script property missing' });
+
+    var ss = SpreadsheetApp.openById(sheetId);
+
+    var action = params.action || 'sheet';
 
     if (action === 'tabs') {
       return json({ tabs: ss.getSheets().map(function (s) { return s.getName(); }) });
@@ -41,8 +54,7 @@ function handle(e) {
       if (!name) return json({ error: 'name_required' });
       var sheet = ss.getSheetByName(name);
       if (!sheet) return json({ error: 'sheet_not_found', name: name });
-      var range = sheet.getDataRange();
-      var values = range.getDisplayValues(); // strings only — preserves what user sees
+      var values = sheet.getDataRange().getDisplayValues();
       var headers = values.length > 0 ? values[0] : [];
       var rows = values.length > 1 ? values.slice(1) : [];
       return json({ sheet: name, headers: headers, values: rows });
