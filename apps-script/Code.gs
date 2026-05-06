@@ -2,8 +2,17 @@
  * MHS Invoice Dashboard — Sheet bridge.
  *
  * Reads from the spreadsheet whose ID is stored in the SHEET_ID script
- * property and (for ?action=lookup) does the phone-match + classification
- * filter server-side so responses are tiny.
+ * property. Provides three endpoints:
+ *
+ *   ?action=index&sheets=<json>&classifications=002,003,004,005&token=...
+ *       -> { index: [{phone, classification, sheet, displayName, matchedHeader, data}], errors }
+ *       This is the primary endpoint the dashboard uses. Returns only rows
+ *       where a phone number is present AND a cell in the row carries an
+ *       allowed classification (`00X (...)`). The payload is small enough to
+ *       cache in Next.js and filter in-memory for any phone lookup.
+ *
+ *   ?action=sheet&name=<TabName>&token=...   -> { sheet, headers, values }
+ *   ?action=tabs&token=...                   -> { tabs: [...] }
  *
  * Setup:
  *   1) Project Settings (gear) → Script Properties:
@@ -11,19 +20,12 @@
  *        - SHEET_ID   = the spreadsheet ID from its URL
  *   2) Deploy → New deployment → Web app.
  *      Execute as: Me. Who has access: Anyone (with the link).
- *   3) Copy the deployment URL into APPS_SCRIPT_URL in .env.local.
- *
- * Endpoints (GET, query string):
- *   ?action=lookup&phone=9876543210&sheets=<json>&classifications=002,003,004,005&token=...
- *       -> { query, results: [{ sheet, displayName, matchedHeaders, rows: [{classification, data}] }], errors }
- *   ?action=sheet&name=<TabName>&token=...   -> { sheet, headers, values }
- *   ?action=tabs&token=...                   -> { tabs: [...] }
  */
 
 var ALLOWED_CLASSIFICATIONS_DEFAULT = ['002', '003', '004', '005'];
-var PHONE_HEADER_RE = /(phone|mobile|alter\s*no|customer\s*phone|whatsapp)/i;
+var PHONE_HEADER_RE = /(phone|mobile|alter\s*no|customer\s*phone|whatsapp|roll\s*number)/i;
 var CLASSIFICATION_RE = /^\s*(0\d{2})\s*\(/;
-var SHEET_CACHE_TTL_S = 300; // 5 min
+var SHEET_CACHE_TTL_S = 600; // 10 min
 
 function doGet(e) { return handle(e); }
 function doPost(e) { return handle(e); }
@@ -40,7 +42,7 @@ function handle(e) {
     var sheetId = props.getProperty('SHEET_ID');
     if (!sheetId) return json({ error: 'server_misconfigured: SHEET_ID script property missing' });
 
-    var action = params.action || 'sheet';
+    var action = params.action || 'index';
 
     if (action === 'tabs') {
       var ss = SpreadsheetApp.openById(sheetId);
@@ -55,8 +57,8 @@ function handle(e) {
       return json({ sheet: name, headers: sheetData.headers, values: sheetData.values });
     }
 
-    if (action === 'lookup') {
-      return doLookup_(sheetId, params);
+    if (action === 'index') {
+      return doIndex_(sheetId, params);
     }
 
     return json({ error: 'unknown_action', action: action });
@@ -65,10 +67,7 @@ function handle(e) {
   }
 }
 
-function doLookup_(sheetId, params) {
-  var phone = normalizePhone_(params.phone);
-  if (!phone) return json({ error: 'phone_required_or_invalid' });
-
+function doIndex_(sheetId, params) {
   var classifications = (params.classifications
     ? String(params.classifications).split(',').map(function (s) { return s.trim(); })
     : ALLOWED_CLASSIFICATIONS_DEFAULT
@@ -84,7 +83,10 @@ function doLookup_(sheetId, params) {
     return json({ error: 'sheets_param_required' });
   }
 
-  var results = [];
+  var classSet = {};
+  for (var c = 0; c < classifications.length; c++) classSet[classifications[c]] = true;
+
+  var index = [];
   var errors = [];
 
   for (var i = 0; i < sheetsConfig.length; i++) {
@@ -96,96 +98,75 @@ function doLookup_(sheetId, params) {
     }
     try {
       var sheetData = readSheetCached_(sheetId, name);
-      if (!sheetData) {
-        errors.push({ sheet: name, message: 'not_found' });
-        continue;
-      }
-      var matched = matchSheet_(sheetData, cfg, phone, classifications);
-      if (matched.rows.length > 0) {
-        results.push({
-          sheet: name,
-          displayName: cfg.displayName || name,
-          matchedHeaders: matched.matchedHeaders,
-          rows: matched.rows,
-        });
-      }
+      if (!sheetData) { errors.push({ sheet: name, message: 'not_found' }); continue; }
+      appendIndexEntries_(index, sheetData, cfg, classSet);
     } catch (err) {
       errors.push({ sheet: name, message: String(err && err.message || err) });
     }
   }
 
-  return json({ query: phone, results: results, errors: errors });
+  return json({ index: index, errors: errors });
 }
 
-function matchSheet_(sheetData, cfg, phone, classifications) {
+function appendIndexEntries_(out, sheetData, cfg, classSet) {
   var headers = sheetData.headers;
   var rows = sheetData.values;
-  var hints = (cfg.phoneColumnHints || []).map(function (h) { return normalizeHeader_(h); });
 
-  // Phone column indexes
+  var hints = (cfg.phoneColumnHints || []).map(function (h) { return normalizeHeader_(h); });
   var phoneIdx = [];
   for (var i = 0; i < headers.length; i++) {
-    var h = headers[i];
+    var h = headers[i] || '';
     if (!h) continue;
     var nh = normalizeHeader_(h);
-    if (hints.indexOf(nh) >= 0 || PHONE_HEADER_RE.test(h)) {
-      phoneIdx.push(i);
-    }
+    if (hints.indexOf(nh) >= 0 || PHONE_HEADER_RE.test(h)) phoneIdx.push(i);
   }
-  if (phoneIdx.length === 0) return { matchedHeaders: [], rows: [] };
-
-  var classificationSet = {};
-  for (var c = 0; c < classifications.length; c++) classificationSet[classifications[c]] = true;
-
-  var matchedHeaders = {};
-  var matchedRows = [];
+  if (phoneIdx.length === 0) return;
 
   for (var r = 0; r < rows.length; r++) {
     var row = rows[r];
     if (!row || row.length === 0) continue;
 
-    // phone match
+    // pick first phone hit
     var hitIdx = -1;
+    var phone = null;
     for (var p = 0; p < phoneIdx.length; p++) {
       var idx = phoneIdx[p];
-      var candidate = normalizePhone_(row[idx]);
-      if (candidate && candidate === phone) {
-        hitIdx = idx;
-        break;
-      }
+      var v = normalizePhone_(row[idx]);
+      if (v) { hitIdx = idx; phone = v; break; }
     }
     if (hitIdx < 0) continue;
 
     // classification scan
     var classification = null;
     for (var k = 0; k < row.length; k++) {
-      var v = row[k];
-      if (v == null) continue;
-      var s = String(v);
+      var cellv = row[k];
+      if (cellv == null) continue;
+      var s = String(cellv);
       var m = s.match(CLASSIFICATION_RE);
-      if (m) {
-        classification = m[1];
-        break;
-      }
+      if (m) { classification = m[1]; break; }
     }
-    if (!classification || !classificationSet[classification]) continue;
-
-    matchedHeaders[headers[hitIdx]] = true;
+    if (!classification || !classSet[classification]) continue;
 
     var dataObj = {};
     for (var c2 = 0; c2 < headers.length; c2++) {
-      var h2 = headers[c2] || ('__col_' + c2);
-      dataObj[h2] = row[c2] != null ? row[c2] : '';
+      var hh = headers[c2] || ('__col_' + c2);
+      dataObj[hh] = row[c2] != null ? row[c2] : '';
     }
-    matchedRows.push({ classification: classification, data: dataObj });
-  }
 
-  return { matchedHeaders: Object.keys(matchedHeaders), rows: matchedRows };
+    out.push({
+      phone: phone,
+      classification: classification,
+      sheet: cfg.name,
+      displayName: cfg.displayName || cfg.name,
+      matchedHeader: headers[hitIdx],
+      data: dataObj,
+    });
+  }
 }
 
 function readSheetCached_(sheetId, sheetName) {
   var cache = CacheService.getScriptCache();
-  var key = 'sheet:' + sheetId + ':' + sheetName;
+  var key = 'sheet:' + sheetId + ':' + sheetName + ':v4';
   var cached = cache.get(key);
   if (cached) {
     try { return JSON.parse(cached); } catch (e) { /* fall through */ }
@@ -199,7 +180,6 @@ function readSheetCached_(sheetId, sheetName) {
     headers: headers,
     values: values.length > 1 ? values.slice(1) : [],
   };
-  // CacheService values capped at 100KB. If too big, skip cache rather than fail.
   try {
     var serialised = JSON.stringify(data);
     if (serialised.length < 95000) {
