@@ -254,19 +254,57 @@ export const getDestPhones = unstable_cache(
   { revalidate: 30, tags: ["dest-phones"] }
 );
 
-export async function appendRows(tab: string, rows: (string | number)[][]): Promise<number[]> {
+/**
+ * Find the last row in the tab that has any non-empty cell in cols A-F.
+ * Returns 0 if the entire tab is empty.
+ */
+async function lastNonEmptyRow(tab: string): Promise<number> {
   const sheetId = accountsSheetId();
   const { token } = await getAccessToken();
   const url = new URL(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}:append`
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}!A:F`
+  );
+  url.searchParams.set("valueRenderOption", "UNFORMATTED_VALUE");
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`lastNonEmptyRow failed for "${tab}": ${res.status} ${body.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { values?: unknown[][] };
+  const values = data.values ?? [];
+  let last = 0;
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    if (row && row.some((c) => c != null && String(c) !== "")) {
+      last = i + 1; // 1-indexed
+    }
+  }
+  return last;
+}
+
+/**
+ * Write a single row at the next empty row after the last actually-non-empty
+ * row. Avoids the values:append behaviour where Google's "data table"
+ * detection adds extra blank rows of padding.
+ */
+export async function appendRows(tab: string, rows: (string | number)[][]): Promise<number[]> {
+  if (rows.length === 0) return [];
+
+  const sheetId = accountsSheetId();
+  const { token } = await getAccessToken();
+
+  const last = await lastNonEmptyRow(tab);
+  const target = last + 1;
+
+  const range = `${tab}!A${target}:AF${target + rows.length - 1}`;
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`
   );
   url.searchParams.set("valueInputOption", "USER_ENTERED");
-  url.searchParams.set("insertDataOption", "INSERT_ROWS");
   url.searchParams.set("includeValuesInResponse", "false");
-  url.searchParams.set("responseValueRenderOption", "FORMATTED_VALUE");
 
   const res = await fetch(url.toString(), {
-    method: "POST",
+    method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
       "content-type": "application/json",
@@ -277,17 +315,8 @@ export async function appendRows(tab: string, rows: (string | number)[][]): Prom
     const body = await res.text().catch(() => "");
     throw new Error(`appendRows failed for "${tab}": ${res.status} ${body.slice(0, 300)}`);
   }
-  const data = (await res.json()) as {
-    updates?: { updatedRange?: string };
-  };
-  // updatedRange like "L2 Diamond Accounts!A3220:AF3220"
-  const range = data.updates?.updatedRange ?? "";
-  const m = range.match(/!\D+(\d+)(?::\D+(\d+))?$/);
-  const startRow = m ? Number(m[1]) : NaN;
-  const endRow = m && m[2] ? Number(m[2]) : startRow;
-  if (!Number.isFinite(startRow)) return [];
   const result: number[] = [];
-  for (let r = startRow; r <= endRow; r++) result.push(r);
+  for (let i = 0; i < rows.length; i++) result.push(target + i);
   return result;
 }
 
