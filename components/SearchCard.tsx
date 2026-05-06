@@ -120,15 +120,25 @@ export function SearchCard({ onResult, onError, onLoadingChange, lastResult }: S
       </form>
 
       {hasMatches ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-violet-100 pt-5">
           <button
             onClick={() => addAllRequest(false)}
             disabled={addAll.kind === "loading"}
-            className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-4 py-2 text-xs font-medium text-violet-700 transition hover:border-violet-300 hover:bg-violet-50 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-medium text-white shadow-md shadow-emerald-300/40 transition hover:opacity-95 disabled:opacity-60"
           >
-            {addAll.kind === "loading" ? "Adding…" : "+ Add all matches → Accounts"}
+            {addAll.kind === "loading" ? (
+              "Adding…"
+            ) : (
+              <>
+                <span className="text-base leading-none">+</span> Add to Accounts
+              </>
+            )}
           </button>
-          <AddAllStatus state={addAll} onConfirm={() => addAllRequest(true)} onCancel={() => setAddAll({ kind: "idle" })} />
+          <AddAllStatus
+            state={addAll}
+            onConfirm={() => addAllRequest(true)}
+            onCancel={() => setAddAll({ kind: "idle" })}
+          />
         </div>
       ) : null}
     </section>

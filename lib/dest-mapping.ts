@@ -56,7 +56,22 @@ export function clientNameFrom(data: Record<string, unknown>, sheet: string): st
   const candidates = NAME_HEADERS_BY_SHEET[sheet] ?? ["Customer Name", "Name", "name"];
   for (const k of candidates) {
     const v = data[k];
-    if (v != null && String(v).trim() !== "") return String(v).trim();
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s === "") continue;
+    // If the value looks like Razorpay's Notes JSON, extract its `name` field.
+    if (s.startsWith("{") && s.includes('"name"')) {
+      try {
+        const parsed = JSON.parse(s);
+        if (parsed && typeof parsed.name === "string" && parsed.name.trim() !== "") {
+          return parsed.name.trim();
+        }
+      } catch {
+        // fall through and use the raw string only if reasonable length
+      }
+      continue;
+    }
+    return s;
   }
   return "";
 }
@@ -237,9 +252,10 @@ export function buildDestRow(matches: MatchedEntry[], query: string): BuildResul
   const classification = pickClassification(matches);
   const tab = targetTab(classification);
 
-  // Split Tagmamgo (Application Fees) from the rest
-  const application = matches.find((m) => m.sheet === "Tagmamgo");
-  const others = matches.filter((m) => m.sheet !== "Tagmamgo");
+  // Application Fees = first match with classification 002 (L2 Application).
+  // Tagmamgo rows that aren't 002 still go to 1st/2nd/3rd Payment.
+  const application = matches.find((m) => m.classification === "002");
+  const others = matches.filter((m) => m !== application);
   // Sort others by Paid Date ascending
   others.sort(
     (a, b) =>
@@ -252,11 +268,16 @@ export function buildDestRow(matches: MatchedEntry[], query: string): BuildResul
     );
   }
 
-  // Pick canonical fields off the FIRST chronological match (preferring non-Tagmamgo)
-  const head = others[0] ?? application ?? matches[0];
-  const clientName = clientNameFrom(head.data, head.sheet);
-  const headDate = paidDateFrom(head.data, head.sheet);
-  const headInvoice = invoiceNumberFrom(head.data, head.sheet);
+  // For the canonical "header" fields:
+  //   - Client Name + Invoice Number: prefer application (clean name source),
+  //     then any non-ICICI, then fall back. ICICI transaction remarks are
+  //     UPI strings, useless as Client Name.
+  //   - Paid Date + Invoice Date: first non-application payment by date.
+  const headForId = pickHeadForIdentity(matches, application, others);
+  const headForDate = others[0] ?? application ?? matches[0];
+  const clientName = clientNameFrom(headForId.data, headForId.sheet);
+  const headDate = paidDateFrom(headForDate.data, headForDate.sheet);
+  const headInvoice = invoiceNumberFrom(headForId.data, headForId.sheet);
 
   const totalAmount = matches.reduce((sum, m) => sum + amountFrom(m.data, m.sheet), 0);
   const paymentModeList = others.map((m) => m.displayName).join(", ") || application?.displayName || "";
@@ -310,4 +331,31 @@ function pickClassification(matches: MatchedEntry[]): AllowedClassification {
     if (matches.some((m) => m.classification === c)) return c;
   }
   return matches[0].classification;
+}
+
+function pickHeadForIdentity(
+  matches: MatchedEntry[],
+  application: MatchedEntry | undefined,
+  others: MatchedEntry[]
+): MatchedEntry {
+  // 1. Application match if it has a clean name
+  if (application && nameLooksClean(clientNameFrom(application.data, application.sheet))) {
+    return application;
+  }
+  // 2. Any non-ICICI other match with a clean name
+  for (const m of others) {
+    if (m.sheet === "ICICI") continue;
+    if (nameLooksClean(clientNameFrom(m.data, m.sheet))) return m;
+  }
+  // 3. Application even if name is empty
+  if (application) return application;
+  // 4. Anything else
+  return others[0] ?? matches[0];
+}
+
+function nameLooksClean(n: string): boolean {
+  if (!n) return false;
+  if (n.length > 50) return false;
+  if (/\//.test(n)) return false;
+  return true;
 }
