@@ -17,7 +17,8 @@ html {
 }
 
 html, body {
-  background: #f7f8fb;
+  background: linear-gradient(180deg, #f5f0ff 0%, #f8f5ff 40%, #f3eeff 100%);
+  background-attachment: fixed;
   color: #111827;
   font-family: var(--font-sans);
 }

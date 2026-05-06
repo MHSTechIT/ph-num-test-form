@@ -1,29 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchSheet } from "@/lib/google-sheets";
-import {
-  SHEETS,
-  findClassificationInRow,
-  findPhoneHeaders,
-  isAllowedClassification,
-  type SheetConfig,
-} from "@/lib/sheets-config";
+import { runLookup, type LookupSheetResult } from "@/lib/google-sheets";
 import { normalizePhone } from "@/lib/phone";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 export type LookupRow = {
   classification: string | null;
   data: Record<string, unknown>;
 };
 
-export type SheetResult = {
-  sheetName: string;
-  displayName: string;
-  highlightColumns: string[];
-  matchedHeaders: string[];
-  rows: LookupRow[];
-};
+export type SheetResult = LookupSheetResult;
 
 export type LookupResponse = {
   query: string;
@@ -47,59 +33,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const settled = await Promise.allSettled(
-    SHEETS.map(async (cfg) => ({ cfg, sheet: await fetchSheet(cfg.sheetName) }))
-  );
-
-  const results: SheetResult[] = [];
-  const errors: { sheetName: string; message: string }[] = [];
-
-  for (let i = 0; i < settled.length; i++) {
-    const cfg = SHEETS[i];
-    const r = settled[i];
-    if (r.status === "rejected") {
-      errors.push({
-        sheetName: cfg.sheetName,
-        message: r.reason instanceof Error ? r.reason.message : String(r.reason),
-      });
-      continue;
-    }
-    const matched = matchSheet(cfg, r.value.sheet, phone);
-    if (matched.rows.length > 0) results.push(matched);
+  try {
+    const data = await runLookup(phone);
+    return NextResponse.json(data);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Bridge error" },
+      { status: 502 }
+    );
   }
-
-  const response: LookupResponse = { query: phone, results, errors };
-  return NextResponse.json(response);
-}
-
-function matchSheet(
-  cfg: SheetConfig,
-  sheet: { headers: string[]; rows: Record<string, unknown>[] },
-  phone: string
-): SheetResult {
-  const phoneHeaders = findPhoneHeaders(sheet.headers, cfg.phoneColumnHints ?? []);
-  const matchedHeaders: Set<string> = new Set();
-  const rows: LookupRow[] = [];
-  for (const row of sheet.rows) {
-    let hit: string | null = null;
-    for (const h of phoneHeaders) {
-      const candidate = normalizePhone(row[h]);
-      if (candidate && candidate === phone) {
-        hit = h;
-        break;
-      }
-    }
-    if (!hit) continue;
-    const classification = findClassificationInRow(row);
-    if (!isAllowedClassification(classification)) continue;
-    matchedHeaders.add(hit);
-    rows.push({ classification, data: row });
-  }
-  return {
-    sheetName: cfg.sheetName,
-    displayName: cfg.displayName,
-    highlightColumns: cfg.highlightColumns ?? [],
-    matchedHeaders: [...matchedHeaders],
-    rows,
-  };
 }

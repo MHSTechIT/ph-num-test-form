@@ -11,16 +11,21 @@ export type AllowedClassification = (typeof ALLOWED_CLASSIFICATIONS)[number];
 
 export const SHEETS: SheetConfig[] = [
   {
+    sheetName: "ICICI",
+    displayName: "ICICI",
+    highlightColumns: ["Date", "Transaction Remarks", "Deposit Amt (INR)", "phone Number"],
+  },
+  {
     sheetName: "Razorpay",
     displayName: "Razorpay",
     phoneColumnHints: ["Phone No"],
     highlightColumns: ["Date", "amount", "method", "card_issuer"],
   },
   {
-    sheetName: "Pine Labs",
-    displayName: "Pine Labs",
+    sheetName: "Tagmamgo",
+    displayName: "Tagmamgo",
     phoneColumnHints: ["Phone No"],
-    highlightColumns: ["Name", "Amount", "Card Issuer", "Card Type"],
+    highlightColumns: ["name", "Amount Received (Sub)", "Payment Type"],
   },
   {
     sheetName: "Savein",
@@ -35,16 +40,6 @@ export const SHEETS: SheetConfig[] = [
     highlightColumns: ["Customer Name", "Loan Finance Amount", "Actual Transaction Date"],
   },
   {
-    sheetName: "Paytm",
-    displayName: "Paytm",
-    phoneColumnHints: [
-      "Payment_Mobile_Number",
-      "Mobile No",
-      "Alternative Mobile No",
-    ],
-    highlightColumns: ["Transaction_Date", "Amount", "Status"],
-  },
-  {
     sheetName: "Phonepay",
     displayName: "PhonePe",
     phoneColumnHints: ["Phone Number", "Phone Number'"],
@@ -55,18 +50,6 @@ export const SHEETS: SheetConfig[] = [
     displayName: "Jodo",
     phoneColumnHints: ["Roll Number", "Alter No"],
     highlightColumns: ["Student Name", "Fee Component Transaction Amount", "Paid Date"],
-  },
-  {
-    sheetName: "Easebuzz",
-    displayName: "Easebuzz",
-    phoneColumnHints: ["Customer Phone"],
-    highlightColumns: ["Customer Name", "Amount", "Date of Transaction"],
-  },
-  {
-    sheetName: "Tagmamgo",
-    displayName: "Tagmamgo",
-    phoneColumnHints: ["Phone No"],
-    highlightColumns: ["name", "Amount Received (Sub)", "Payment Type"],
   },
 ];
 

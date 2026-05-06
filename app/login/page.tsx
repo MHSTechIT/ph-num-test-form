@@ -32,27 +32,25 @@ function LoginForm() {
 
   return (
     <main className="mx-auto mt-16 max-w-md px-6">
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <h1 className="text-lg font-semibold text-zinc-900">Sign In</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Enter the shared password to access the dashboard.
-        </p>
+      <div className="rounded-3xl border border-violet-200/70 bg-white/85 p-7 shadow-[0_10px_40px_-20px_rgba(124,58,237,0.25)] backdrop-blur">
+        <p className="text-xs font-medium uppercase tracking-wider text-violet-600/80">Sign In</p>
+        <h1 className="mt-1 text-lg font-semibold text-zinc-900">Enter the shared password</h1>
         <form onSubmit={onSubmit} className="mt-5 space-y-4">
           <div>
-            <label className="text-xs font-medium text-zinc-700">Password</label>
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Password</label>
             <input
               type="password"
               autoFocus
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+              className="mt-1 w-full rounded-full border border-violet-200/80 bg-white px-4 py-2.5 text-sm outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
             />
           </div>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full rounded-md bg-gradient-to-r from-fuchsia-500 to-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
+            className="w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-2.5 text-sm font-medium text-white shadow-md shadow-violet-300/40 transition hover:opacity-95 disabled:opacity-60"
           >
             {loading ? "Signing in…" : "Sign In"}
           </button>

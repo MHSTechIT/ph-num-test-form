@@ -15,10 +15,10 @@ export function Header({ showSignOut = true }: { showSignOut?: boolean }) {
   }
 
   return (
-    <header className="border-b bg-white">
-      <div className="flex w-full items-center justify-between px-6 py-3">
+    <header className="bg-transparent">
+      <div className="flex w-full items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="grid size-9 place-items-center rounded-md bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white">
+          <div className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-sm shadow-violet-200">
             <ButterflyIcon />
           </div>
           <div className="leading-tight">
@@ -30,8 +30,9 @@ export function Header({ showSignOut = true }: { showSignOut?: boolean }) {
           <button
             onClick={signOut}
             disabled={loading}
-            className="text-sm text-zinc-600 transition hover:text-zinc-900 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full border border-violet-200/70 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm backdrop-blur transition hover:border-violet-300 hover:text-zinc-900 disabled:opacity-60"
           >
+            <SignOutIcon />
             {loading ? "Signing out…" : "Sign Out"}
           </button>
         ) : null}
@@ -58,6 +59,20 @@ function ButterflyIcon() {
         strokeLinejoin="round"
       />
       <path d="M12 7v10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SignOutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="size-3.5">
+      <path
+        d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 17l5-5-5-5M21 12H9"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

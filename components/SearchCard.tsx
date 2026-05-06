@@ -40,27 +40,29 @@ export function SearchCard({ onResult, onError, onLoadingChange }: SearchCardPro
   }
 
   return (
-    <section className="rounded-xl border bg-white p-6 shadow-sm">
-      <p className="text-sm text-zinc-500">Enter a 10-digit Mobile Number</p>
-      <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3 sm:flex-row">
+    <section className="rounded-3xl border border-violet-200/70 bg-white/80 p-7 shadow-[0_10px_40px_-20px_rgba(124,58,237,0.25)] backdrop-blur">
+      <p className="text-xs font-medium uppercase tracking-wider text-violet-600/80">Customer lookup</p>
+      <h2 className="mt-1 text-lg font-semibold text-zinc-900">Enter a 10-digit Mobile Number</h2>
+      <form onSubmit={onSubmit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-violet-400">
             <PhoneIcon />
           </span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             inputMode="numeric"
-            placeholder="Mobile (9626324237)"
-            className="w-full rounded-md border border-zinc-200 bg-white py-2.5 pl-9 pr-3 text-sm font-mono outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+            placeholder="9626324237"
+            className="w-full rounded-full border border-violet-200/80 bg-white py-3 pl-11 pr-4 text-sm font-mono tracking-wide text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
           />
         </div>
         <button
           type="submit"
           disabled={submitting || !query.trim()}
-          className="rounded-md bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-6 py-3 text-sm font-medium text-white shadow-md shadow-violet-300/40 transition hover:opacity-95 disabled:opacity-60"
         >
           {submitting ? "Searching…" : "Get Details"}
+          {!submitting ? <ArrowIcon /> : null}
         </button>
       </form>
     </section>
@@ -77,6 +79,14 @@ function PhoneIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="size-3.5">
+      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -1,12 +1,23 @@
 import type { SheetResult } from "@/app/api/lookup/route";
 
+const CLASS_LABEL: Record<string, string> = {
+  "002": "L2 Application",
+  "003": "L2 Diamond",
+  "004": "L2 Gold",
+  "005": "L2 EMI",
+};
+
 export function ResultCard({ result }: { result: SheetResult }) {
   return (
-    <article className="rounded-xl border bg-white p-5 shadow-sm">
-      <header className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-zinc-900">{result.displayName}</h3>
+    <article className="rounded-3xl border border-violet-200/60 bg-white/85 p-6 shadow-[0_10px_40px_-24px_rgba(124,58,237,0.25)] backdrop-blur">
+      <header className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-7 items-center rounded-full bg-violet-100/80 px-3 text-xs font-semibold uppercase tracking-wider text-violet-700">
+            {result.displayName}
+          </span>
+        </div>
         <span className="text-xs text-zinc-500">
-          {result.rows.length} row{result.rows.length === 1 ? "" : "s"}
+          {result.rows.length} {result.rows.length === 1 ? "row" : "rows"}
         </span>
       </header>
       <div className="space-y-4">
@@ -37,14 +48,16 @@ function RowBlock({
   const rest = entries.filter(([k]) => !highlight.includes(k));
 
   return (
-    <div className="rounded-lg border border-zinc-100 bg-zinc-50/40 p-3">
+    <div className="rounded-2xl border border-zinc-100 bg-gradient-to-br from-white to-violet-50/30 p-4">
       {classification ? (
-        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700">
+        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+          <span className="size-1.5 rounded-full bg-emerald-500" />
           {classification}
+          {CLASS_LABEL[classification] ? <span className="font-normal text-emerald-600">· {CLASS_LABEL[classification]}</span> : null}
         </div>
       ) : null}
       {highlighted.length > 0 ? (
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
           {highlighted.map(([k, v]) => (
             <Field key={k} label={k} value={v} />
           ))}
@@ -52,10 +65,10 @@ function RowBlock({
       ) : null}
       {rest.length > 0 ? (
         <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700">
+          <summary className="cursor-pointer text-xs font-medium text-violet-600 hover:text-violet-800">
             Show all fields ({rest.length})
           </summary>
-          <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+          <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
             {rest.map(([k, v]) => (
               <Field key={k} label={k} value={v} />
             ))}
@@ -68,9 +81,9 @@ function RowBlock({
 
 function Field({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="min-w-0 border-b border-dashed border-zinc-200 py-1 last:border-b-0">
-      <dt className="truncate text-[11px] uppercase tracking-wide text-zinc-500">{label}</dt>
-      <dd className="break-words text-sm text-zinc-800">{formatValue(value)}</dd>
+    <div className="min-w-0 border-b border-dashed border-zinc-200/70 py-1 last:border-b-0">
+      <dt className="truncate text-[10px] uppercase tracking-wider text-zinc-500">{label}</dt>
+      <dd className="break-words text-sm text-zinc-900">{formatValue(value)}</dd>
     </div>
   );
 }

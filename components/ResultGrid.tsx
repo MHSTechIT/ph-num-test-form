@@ -12,15 +12,15 @@ export function ResultGrid({
 }) {
   if (loading) {
     return (
-      <div className="mt-6 rounded-xl border border-dashed border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
-        Searching across all sheets…
+      <div className="mt-6 rounded-3xl border border-violet-200/70 bg-white/70 p-12 text-center text-sm text-zinc-500 backdrop-blur">
+        <span className="inline-block animate-pulse text-violet-600">Searching across all sheets…</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="mt-6 rounded-2xl border border-red-200 bg-red-50/80 p-4 text-sm text-red-700">
         {error}
       </div>
     );
@@ -30,8 +30,8 @@ export function ResultGrid({
 
   if (data.results.length === 0) {
     return (
-      <div className="mt-6 rounded-xl border border-dashed border-zinc-200 bg-white p-10 text-center">
-        <p className="text-sm font-medium text-zinc-700">No matching invoice found</p>
+      <div className="mt-6 rounded-3xl border border-violet-200/60 bg-white/80 p-12 text-center backdrop-blur">
+        <p className="text-sm font-semibold text-zinc-800">No matching invoice found</p>
         <p className="mt-1 text-xs text-zinc-500">
           We searched every payment source for {data.query} but didn&apos;t find a row classified
           002–005.
@@ -52,7 +52,7 @@ export function ResultGrid({
         <ResultCard key={r.sheetName} result={r} />
       ))}
       {data.errors.length > 0 ? (
-        <div className="col-span-full rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        <div className="col-span-full rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-800">
           Could not read: {data.errors.map((e) => e.sheetName).join(", ")}
         </div>
       ) : null}
