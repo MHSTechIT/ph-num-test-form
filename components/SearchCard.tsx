@@ -1,16 +1,27 @@
 "use client";
 
 import { useState } from "react";
+import type { LookupResponse } from "@/app/api/lookup/route";
+import type { AppendResponse } from "@/app/api/append/route";
 
 export type SearchCardProps = {
-  onResult: (data: import("@/app/api/lookup/route").LookupResponse) => void;
+  onResult: (data: LookupResponse) => void;
   onError: (message: string) => void;
   onLoadingChange: (loading: boolean) => void;
+  lastResult: LookupResponse | null;
 };
 
-export function SearchCard({ onResult, onError, onLoadingChange }: SearchCardProps) {
+type AddAllState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "success"; tab: string; row: number; warnings: string[] }
+  | { kind: "duplicate"; tab: string; row: number }
+  | { kind: "error"; message: string };
+
+export function SearchCard({ onResult, onError, onLoadingChange, lastResult }: SearchCardProps) {
   const [query, setQuery] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [addAll, setAddAll] = useState<AddAllState>({ kind: "idle" });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -18,6 +29,7 @@ export function SearchCard({ onResult, onError, onLoadingChange }: SearchCardPro
     if (!cleaned) return;
     setSubmitting(true);
     onLoadingChange(true);
+    setAddAll({ kind: "idle" });
     try {
       const res = await fetch("/api/lookup", {
         method: "POST",
@@ -29,7 +41,7 @@ export function SearchCard({ onResult, onError, onLoadingChange }: SearchCardPro
         onError(payload.error || `Request failed (${res.status})`);
         return;
       }
-      const data = (await res.json()) as import("@/app/api/lookup/route").LookupResponse;
+      const data = (await res.json()) as LookupResponse;
       onResult(data);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Network error");
@@ -39,9 +51,50 @@ export function SearchCard({ onResult, onError, onLoadingChange }: SearchCardPro
     }
   }
 
+  async function addAllRequest(confirm = false) {
+    if (!lastResult || lastResult.results.length === 0) return;
+    setAddAll({ kind: "loading" });
+    try {
+      const res = await fetch("/api/append", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "all", query: lastResult.query, confirm }),
+      });
+      const payload = (await res.json()) as AppendResponse;
+      if (payload.ok) {
+        const first = payload.appended[0];
+        setAddAll({
+          kind: "success",
+          tab: first.tab,
+          row: first.row,
+          warnings: payload.warnings ?? [],
+        });
+      } else if (payload.reason === "duplicate") {
+        const e = payload.existing[0];
+        setAddAll({ kind: "duplicate", tab: e.tab, row: e.row });
+      } else if (payload.reason === "no_matches") {
+        setAddAll({ kind: "error", message: "No matches to add." });
+      } else {
+        setAddAll({
+          kind: "error",
+          message: "message" in payload ? payload.message : "Append failed",
+        });
+      }
+    } catch (err) {
+      setAddAll({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Network error",
+      });
+    }
+  }
+
+  const hasMatches = !!lastResult && lastResult.results.length > 0;
+
   return (
     <section className="rounded-3xl border border-violet-200/70 bg-white/80 p-7 shadow-[0_10px_40px_-20px_rgba(124,58,237,0.25)] backdrop-blur">
-      <p className="text-xs font-medium uppercase tracking-wider text-violet-600/80">Customer lookup</p>
+      <p className="text-xs font-medium uppercase tracking-wider text-violet-600/80">
+        Customer lookup
+      </p>
       <h2 className="mt-1 text-lg font-semibold text-zinc-900">Enter a 10-digit Mobile Number</h2>
       <form onSubmit={onSubmit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -65,8 +118,69 @@ export function SearchCard({ onResult, onError, onLoadingChange }: SearchCardPro
           {!submitting ? <ArrowIcon /> : null}
         </button>
       </form>
+
+      {hasMatches ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => addAllRequest(false)}
+            disabled={addAll.kind === "loading"}
+            className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-4 py-2 text-xs font-medium text-violet-700 transition hover:border-violet-300 hover:bg-violet-50 disabled:opacity-60"
+          >
+            {addAll.kind === "loading" ? "Adding…" : "+ Add all matches → Accounts"}
+          </button>
+          <AddAllStatus state={addAll} onConfirm={() => addAllRequest(true)} onCancel={() => setAddAll({ kind: "idle" })} />
+        </div>
+      ) : null}
     </section>
   );
+}
+
+function AddAllStatus({
+  state,
+  onConfirm,
+  onCancel,
+}: {
+  state: AddAllState;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (state.kind === "success") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700">
+        ✓ Added · {state.tab} row {state.row}
+        {state.warnings.length > 0 ? (
+          <span className="ml-2 text-amber-700">· {state.warnings.join(" · ")}</span>
+        ) : null}
+      </span>
+    );
+  }
+  if (state.kind === "duplicate") {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+        Already in {state.tab} row {state.row}.
+        <button
+          onClick={onCancel}
+          className="rounded-full border border-amber-300 bg-white px-2 py-0.5 hover:bg-amber-100"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          className="rounded-full bg-amber-600 px-2 py-0.5 font-medium text-white hover:bg-amber-700"
+        >
+          Add anyway
+        </button>
+      </span>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+        {state.message}
+      </span>
+    );
+  }
+  return null;
 }
 
 function PhoneIcon() {
@@ -86,7 +200,13 @@ function PhoneIcon() {
 function ArrowIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="size-3.5">
-      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M5 12h14M13 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

@@ -30,6 +30,7 @@ export default function HomePage() {
             setData(null);
           }}
           onLoadingChange={setLoading}
+          lastResult={data}
         />
         <ResultGrid data={data} loading={loading} error={error} />
       </main>

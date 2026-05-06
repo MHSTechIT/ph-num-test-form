@@ -49,7 +49,7 @@ export function ResultGrid({
   return (
     <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
       {data.results.map((r) => (
-        <ResultCard key={r.sheetName} result={r} />
+        <ResultCard key={r.sheetName} result={r} query={data.query} />
       ))}
       {data.errors.length > 0 ? (
         <div className="col-span-full rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-800">

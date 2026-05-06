@@ -211,6 +211,90 @@ export async function fetchTabs(): Promise<string[]> {
   return (data.sheets ?? []).map((s) => s.properties.title);
 }
 
+/* ------------------------------------------------------------------------- */
+/* Destination "Accounts" sheet — append + duplicate scan                      */
+/* ------------------------------------------------------------------------- */
+
+const DEFAULT_ACCOUNTS_SHEETS_ID = "1cUFTVpZf-O-e-On2KwHqbl_Jpfwqqvmnf0_4H9xGJ50";
+
+function accountsSheetId(): string {
+  return process.env.ACCOUNTS_SHEETS_ID || DEFAULT_ACCOUNTS_SHEETS_ID;
+}
+
+/**
+ * Returns a Map<phone, rowNumber> for column F of the given destination tab.
+ * Cached briefly so duplicate scans during a flurry of clicks stay cheap.
+ */
+async function fetchDestPhonesUncached(tab: string): Promise<Array<[string, number]>> {
+  const sheetId = accountsSheetId();
+  const { token } = await getAccessToken();
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}!F:F`
+  );
+  url.searchParams.set("valueRenderOption", "FORMATTED_VALUE");
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`getDestPhones failed for "${tab}": ${res.status} ${body.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { values?: unknown[][] };
+  const out: Array<[string, number]> = [];
+  const values = data.values ?? [];
+  for (let i = 0; i < values.length; i++) {
+    const cell = values[i]?.[0];
+    const phone = normalizePhone(cell);
+    if (phone) out.push([phone, i + 1]); // 1-indexed row
+  }
+  return out;
+}
+
+export const getDestPhones = unstable_cache(
+  async (tab: string) => fetchDestPhonesUncached(tab),
+  ["mhs-dest-phones-v1"],
+  { revalidate: 30, tags: ["dest-phones"] }
+);
+
+export async function appendRows(tab: string, rows: (string | number)[][]): Promise<number[]> {
+  const sheetId = accountsSheetId();
+  const { token } = await getAccessToken();
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}:append`
+  );
+  url.searchParams.set("valueInputOption", "USER_ENTERED");
+  url.searchParams.set("insertDataOption", "INSERT_ROWS");
+  url.searchParams.set("includeValuesInResponse", "false");
+  url.searchParams.set("responseValueRenderOption", "FORMATTED_VALUE");
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ values: rows }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`appendRows failed for "${tab}": ${res.status} ${body.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as {
+    updates?: { updatedRange?: string };
+  };
+  // updatedRange like "L2 Diamond Accounts!A3220:AF3220"
+  const range = data.updates?.updatedRange ?? "";
+  const m = range.match(/!\D+(\d+)(?::\D+(\d+))?$/);
+  const startRow = m ? Number(m[1]) : NaN;
+  const endRow = m && m[2] ? Number(m[2]) : startRow;
+  if (!Number.isFinite(startRow)) return [];
+  const result: number[] = [];
+  for (let r = startRow; r <= endRow; r++) result.push(r);
+  return result;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Legacy fetchSheet retained for inspect-headers script.                      */
+/* ------------------------------------------------------------------------- */
+
 export async function fetchSheet(
   sheetName: string
 ): Promise<{ sheetName: string; headers: string[]; rows: Record<string, unknown>[] }> {

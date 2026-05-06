@@ -76,6 +76,17 @@ It hits the Sheets API and prints headers for every in-scope tab so you can conf
 
 For 24/7 instant lookups, set up a Vercel Cron that hits `/api/warmup` every 5 minutes — keeps the phone index hot.
 
+## Add to Accounts
+
+Each result card has a **+ Add to Accounts** button that appends the matched row into a separate "Accounts" spreadsheet (default `ACCOUNTS_SHEETS_ID = 1cUFTVpZf-O-e-On2KwHqbl_Jpfwqqvmnf0_4H9xGJ50`).
+
+- **Per-card**: appends a single row from one source.
+- **Add all matches → Accounts** (below the search box): appends one consolidated row aggregating Tagmamgo into "Application Fees" and the rest into 1st/2nd/3rd Payment columns ordered by date.
+- **Tab routing**: 003 → `L2 Diamond Accounts`, 004 → `L2 Gold Accounts`, 002 + 005 → `L2 Diamond Accounts` with the classification label written into column 8 (Payment Type).
+- **Duplicate guard**: if the phone is already in the destination tab, the dashboard shows a "Phone already exists at row N — Add anyway?" prompt before writing.
+
+The OAuth credentials need `https://www.googleapis.com/auth/drive` scope (or `https://www.googleapis.com/auth/spreadsheets`) for writes. The refresh token used in this repo already carries the broader Drive scope.
+
 ## Notes
 
 - Read-only — the dashboard never writes back to the sheet.
