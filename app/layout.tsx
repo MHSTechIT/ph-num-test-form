@@ -10,7 +10,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "My Health School — Invoice Generator",
+  title: "Customer Lookup",
   description: "Lookup customer invoice records across payment sources.",
 };
 

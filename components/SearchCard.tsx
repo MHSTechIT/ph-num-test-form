@@ -8,7 +8,9 @@ export type SearchCardProps = {
   onResult: (data: LookupResponse) => void;
   onError: (message: string) => void;
   onLoadingChange: (loading: boolean) => void;
+  onShatterStart?: () => void;
   lastResult: LookupResponse | null;
+  hero?: boolean;
 };
 
 type AddAllState =
@@ -18,7 +20,14 @@ type AddAllState =
   | { kind: "duplicate"; tab: string; row: number }
   | { kind: "error"; message: string };
 
-export function SearchCard({ onResult, onError, onLoadingChange, lastResult }: SearchCardProps) {
+export function SearchCard({
+  onResult,
+  onError,
+  onLoadingChange,
+  onShatterStart,
+  lastResult,
+  hero = false,
+}: SearchCardProps) {
   const [query, setQuery] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [addAll, setAddAll] = useState<AddAllState>({ kind: "idle" });
@@ -30,6 +39,7 @@ export function SearchCard({ onResult, onError, onLoadingChange, lastResult }: S
     setSubmitting(true);
     onLoadingChange(true);
     setAddAll({ kind: "idle" });
+    onShatterStart?.();
     try {
       const res = await fetch("/api/lookup", {
         method: "POST",
@@ -90,13 +100,38 @@ export function SearchCard({ onResult, onError, onLoadingChange, lastResult }: S
 
   const hasMatches = !!lastResult && lastResult.results.length > 0;
 
+  const sectionClasses = hero
+    ? "rounded-[36px] border border-white/60 bg-white/85 p-10 shadow-[0_30px_80px_-20px_rgba(124,58,237,0.45)] backdrop-blur-xl"
+    : "rounded-3xl border border-violet-200/70 bg-white/80 p-7 shadow-[0_10px_40px_-20px_rgba(124,58,237,0.25)] backdrop-blur";
+
   return (
-    <section className="rounded-3xl border border-violet-200/70 bg-white/80 p-7 shadow-[0_10px_40px_-20px_rgba(124,58,237,0.25)] backdrop-blur">
-      <p className="text-xs font-medium uppercase tracking-wider text-violet-600/80">
+    <section className={sectionClasses}>
+      <p
+        className={
+          hero
+            ? "text-center text-xs font-semibold uppercase tracking-[0.3em] text-violet-600/80"
+            : "text-xs font-medium uppercase tracking-wider text-violet-600/80"
+        }
+      >
         Customer lookup
       </p>
-      <h2 className="mt-1 text-lg font-semibold text-zinc-900">Enter a 10-digit Mobile Number</h2>
-      <form onSubmit={onSubmit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <h2
+        className={
+          hero
+            ? "mt-3 text-center text-2xl font-bold text-zinc-900 sm:text-3xl"
+            : "mt-1 text-lg font-semibold text-zinc-900"
+        }
+      >
+        Enter a 10-digit Mobile Number
+      </h2>
+      <form
+        onSubmit={onSubmit}
+        className={
+          hero
+            ? "mt-7 flex flex-col gap-3 sm:flex-row sm:items-center"
+            : "mt-5 flex flex-col gap-3 sm:flex-row sm:items-center"
+        }
+      >
         <div className="relative flex-1">
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-violet-400">
             <PhoneIcon />
@@ -106,13 +141,22 @@ export function SearchCard({ onResult, onError, onLoadingChange, lastResult }: S
             onChange={(e) => setQuery(e.target.value)}
             inputMode="numeric"
             placeholder="9626324237"
-            className="w-full rounded-full border border-violet-200/80 bg-white py-3 pl-11 pr-4 text-sm font-mono tracking-wide text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+            autoFocus={hero}
+            className={
+              hero
+                ? "w-full rounded-full border border-violet-200/80 bg-white py-4 pl-12 pr-4 text-base font-mono tracking-wide text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                : "w-full rounded-full border border-violet-200/80 bg-white py-3 pl-11 pr-4 text-sm font-mono tracking-wide text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+            }
           />
         </div>
         <button
           type="submit"
           disabled={submitting || !query.trim()}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-6 py-3 text-sm font-medium text-white shadow-md shadow-violet-300/40 transition hover:opacity-95 disabled:opacity-60"
+          className={
+            hero
+              ? "inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-7 py-4 text-sm font-medium text-white shadow-md shadow-violet-300/40 transition hover:opacity-95 disabled:opacity-60"
+              : "inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-6 py-3 text-sm font-medium text-white shadow-md shadow-violet-300/40 transition hover:opacity-95 disabled:opacity-60"
+          }
         >
           {submitting ? "Searching…" : "Get Details"}
           {!submitting ? <ArrowIcon /> : null}
