@@ -320,6 +320,56 @@ export async function appendRows(tab: string, rows: (string | number)[][]): Prom
   return result;
 }
 
+/**
+ * Read a single row from the destination tab as an array of cell values.
+ */
+export async function getDestRow(tab: string, rowNumber: number): Promise<(string | number)[]> {
+  const sheetId = accountsSheetId();
+  const { token } = await getAccessToken();
+  const range = `${tab}!A${rowNumber}:AF${rowNumber}`;
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`
+  );
+  url.searchParams.set("valueRenderOption", "UNFORMATTED_VALUE");
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`getDestRow failed for ${tab} row ${rowNumber}: ${res.status} ${body.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { values?: unknown[][] };
+  const row = data.values?.[0] ?? [];
+  return row.map((c) => (c == null ? "" : (c as string | number)));
+}
+
+/**
+ * Overwrite a single row at a known row number.
+ */
+export async function updateDestRow(
+  tab: string,
+  rowNumber: number,
+  values: (string | number)[]
+): Promise<void> {
+  const sheetId = accountsSheetId();
+  const { token } = await getAccessToken();
+  const range = `${tab}!A${rowNumber}:AF${rowNumber}`;
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`
+  );
+  url.searchParams.set("valueInputOption", "USER_ENTERED");
+  const res = await fetch(url.toString(), {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ values: [values] }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`updateDestRow failed for ${tab} row ${rowNumber}: ${res.status} ${body.slice(0, 200)}`);
+  }
+}
+
 /* ------------------------------------------------------------------------- */
 /* Legacy fetchSheet retained for inspect-headers script.                      */
 /* ------------------------------------------------------------------------- */

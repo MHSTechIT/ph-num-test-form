@@ -359,3 +359,33 @@ function nameLooksClean(n: string): boolean {
   if (/\//.test(n)) return false;
   return true;
 }
+
+/**
+ * Merge a freshly-built row into an existing destination row. For each
+ * column: keep the existing value if it's non-empty, otherwise take the
+ * new value. Returns the merged row plus the indices of columns that
+ * were filled in (so the UI can report "filled 4 blanks").
+ */
+export function mergeRows(
+  existing: (string | number)[],
+  next: (string | number)[]
+): { merged: (string | number)[]; filled: number[] } {
+  const length = Math.max(existing.length, next.length);
+  const merged: (string | number)[] = new Array(length).fill("");
+  const filled: number[] = [];
+  for (let i = 0; i < length; i++) {
+    const ex = existing[i];
+    const nx = next[i];
+    const exNonEmpty = ex != null && String(ex).trim() !== "";
+    const nxNonEmpty = nx != null && String(nx).trim() !== "";
+    if (exNonEmpty) {
+      merged[i] = ex;
+    } else if (nxNonEmpty) {
+      merged[i] = nx;
+      filled.push(i);
+    } else {
+      merged[i] = "";
+    }
+  }
+  return { merged, filled };
+}

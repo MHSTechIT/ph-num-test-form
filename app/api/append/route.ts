@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   appendRows,
   getDestPhones,
+  getDestRow,
   getPhoneIndex,
+  updateDestRow,
   type IndexEntry,
 } from "@/lib/google-sheets";
-import { buildDestRow, type MatchedEntry } from "@/lib/dest-mapping";
+import { buildDestRow, mergeRows, type MatchedEntry } from "@/lib/dest-mapping";
 import { normalizePhone } from "@/lib/phone";
 import { revalidateTag } from "next/cache";
 
@@ -15,22 +17,21 @@ type AppendRequest = {
   mode?: "single" | "all";
   query?: string;
   sheetName?: string;
-  confirm?: boolean;
 };
 
 type AppendOk = {
   ok: true;
-  appended: { tab: string; row: number }[];
+  result: {
+    tab: string;
+    row: number;
+    action: "appended" | "merged";
+    filledColumns: number;
+  };
   warnings: string[];
-};
-type AppendDuplicate = {
-  ok: false;
-  reason: "duplicate";
-  existing: { tab: string; row: number }[];
 };
 type AppendNoMatches = { ok: false; reason: "no_matches" };
 type AppendError = { ok: false; reason: "error"; message: string };
-export type AppendResponse = AppendOk | AppendDuplicate | AppendNoMatches | AppendError;
+export type AppendResponse = AppendOk | AppendNoMatches | AppendError;
 
 export async function POST(req: NextRequest) {
   let body: AppendRequest;
@@ -51,7 +52,6 @@ export async function POST(req: NextRequest) {
     );
   }
   const mode = body.mode === "single" ? "single" : "all";
-  const confirm = body.confirm === true;
 
   let index;
   try {
@@ -80,8 +80,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Build the row(s). For per-card adds, pass just that card's match.
-  // For 'all' mode, pass all matches in one go (one consolidated row).
   let built;
   try {
     built = buildDestRow(toMatchedEntries(matches), phone);
@@ -92,7 +90,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Duplicate scan
+  // Look for an existing row with this phone in the target tab.
   let phones: Array<[string, number]> = [];
   try {
     phones = await getDestPhones(built.tab);
@@ -106,14 +104,38 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-  const existing = phones.filter(([p]) => p === phone).map(([, r]) => ({ tab: built.tab, row: r }));
-  if (existing.length > 0 && !confirm) {
-    return NextResponse.json({ ok: false, reason: "duplicate", existing } satisfies AppendResponse, {
-      status: 409,
-    });
+  const existing = phones.filter(([p]) => p === phone).map(([, r]) => r);
+
+  // === Merge path: phone already in destination -> fill blanks of existing row ===
+  if (existing.length > 0) {
+    const targetRow = existing[0]; // first existing row; later ones would be merged on subsequent clicks
+    let mergedFilled = 0;
+    try {
+      const existingRow = await getDestRow(built.tab, targetRow);
+      const { merged, filled } = mergeRows(existingRow, built.row);
+      mergedFilled = filled.length;
+      if (filled.length > 0) {
+        await updateDestRow(built.tab, targetRow, merged);
+      }
+    } catch (err) {
+      return NextResponse.json(
+        { ok: false, reason: "error", message: err instanceof Error ? err.message : "merge failed" },
+        { status: 502 }
+      );
+    }
+    try {
+      revalidateTag("dest-phones");
+    } catch {
+      // ignore
+    }
+    return NextResponse.json({
+      ok: true,
+      result: { tab: built.tab, row: targetRow, action: "merged", filledColumns: mergedFilled },
+      warnings: built.warnings,
+    } satisfies AppendResponse);
   }
 
-  // Append
+  // === Append path: brand-new entry ===
   let rowNums: number[] = [];
   try {
     rowNums = await appendRows(built.tab, [built.row]);
@@ -123,16 +145,21 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-  // Bust the dest-phones cache so the next duplicate check reflects the new row.
   try {
     revalidateTag("dest-phones");
   } catch {
     // ignore
   }
 
+  // Count non-empty cells we actually wrote.
+  let filledColumns = 0;
+  for (const v of built.row) {
+    if (v != null && String(v).trim() !== "") filledColumns += 1;
+  }
+
   return NextResponse.json({
     ok: true,
-    appended: rowNums.map((r) => ({ tab: built.tab, row: r })),
+    result: { tab: built.tab, row: rowNums[0], action: "appended", filledColumns },
     warnings: built.warnings,
   } satisfies AppendResponse);
 }
